@@ -35,3 +35,7 @@ jspm_packages
 
 # Optional REPL history
 .node_repl_history
+
+# carpeta de temporal donde se guardan los archivos recibidos del maletin no se subira al
+# repositorio.
+temp/
