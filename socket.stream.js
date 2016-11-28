@@ -14,12 +14,19 @@
   var path = require('path');
 
   var fs  = require('fs'),
-	  concat=require('./concatenar');
+	  concat=require('./concatenar'),
+	  proceso = require('./toCentral');
 
   var PathTemp='./temp/';
   var arrSockets=[];
 
-
+  
+  // inicia el proceso en segundo plano con timer para conectarse a la central y
+  // enviarle los archivos uno a uno a la central de cada maletin almacenado en esta
+  // pc. Y al finalizar importar los datos en mongo en la central.
+  proceso.start();
+  
+  
   // PARAMETROS EN FORMA DE PROTOTYPE PARA VALORES UNICOS PARA CADA SOCKET CONECTADO.
   function Parametros(){
   }
@@ -194,7 +201,8 @@
 								console.log("emit de finalizacion enviado");
 								// crea un archivo ready.txt solo para indicarle a la tarea en brackground que el folder esta listo.
 								// para ser enviaod a la central.
-								
+								concat.newFile(PathTemp+socket.parametros.ambulancia+"/"+"ready.txt", socket.parametros.TotalExportados.toString());
+
 							}
 							else {
 								informaFalla(socket);

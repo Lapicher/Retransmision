@@ -62,6 +62,7 @@ function getFilesNames(directorio,callback){
 		callback(files);
 	});
 }
+module.exports.getFilesNames = getFilesNames;
 /*
 			Funcion para obtener el tamaño de un archivo que se le indique por el argumento.
 */
@@ -106,8 +107,22 @@ module.exports.eliminarTemporales=function(pathDestino, callback){
 				}
 		}
 		else {
-				callback(false);
+			callback(false);
 		}
 
 	});
+}
+
+module.exports.newFile= function(nombreFile, datos){
+	// crea el archivo.
+	var writeStream = fs.createWriteStream(nombreFile);
+    fs.createWriteStream(nombreFile);
+	
+	// escribe en el archivo.
+	writeStream.write(datos);
+	writeStream.end();
+}
+module.exports.readFile = function(file){
+	var data = fs.readFileSync(file);
+	return data.toString();
 }
