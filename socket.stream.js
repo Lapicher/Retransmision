@@ -105,6 +105,9 @@
 		  // en caso de que existe algun temporal que no se haya borrado, al iniciar
 		  // el proceso de sincronizacion se intenta borrar los archivos que se encuentren
 		  // para recibir los nuevos archivos.
+		 socket.parametros.TotalExportados=data;
+		 socket.emit('docsTotales.ok');
+		 /*
 		  concat.eliminarTemporales(PathTemp+socket.parametros.ambulancia+"/",function(del){
 			  if(del){
 				  //console.log("Docuemtnos Totales: "+data);
@@ -114,8 +117,9 @@
 			  else {
 				  informaFalla(socket);
 			  }
-
 		  });
+		  */
+		  
 	  });
 	  /********************************************************************************************************
 			  LISTENER PARA RECIBIR LOS ARCHIVOS TOTALES O PARTES A UNIR.

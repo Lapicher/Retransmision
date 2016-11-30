@@ -81,26 +81,26 @@ module.exports.eliminarTemporales=function(pathDestino, callback){
 		console.log(files);
 		if(files!=null){
 				if(files.length>0){
-							var cont=0;
-							for(i=0;i<files.length;i++){
-								fs.unlink(pathDestino+files[i], function(err){
-										//comprobamos si ha ocurrido algun error
-										if(err){
-												console.error(err);
-												i=files.length;
-												callback(false);
+					var cont=0;
+					for(i=0;i<files.length;i++){
+						fs.unlink(pathDestino+files[i], function(err){
+								//comprobamos si ha ocurrido algun error
+								if(err){
+										console.error(err);
+										i=files.length;
+										callback(false);
+								}
+								//informamos de que el fichero ha sido eliminado
+								else{
+										cont++;
+										if(cont===files.length)
+										{
+												console.log("Todos los archivos fueron eliminados");
+												callback(true);
 										}
-										//informamos de que el fichero ha sido eliminado
-										else{
-												cont++;
-												if(cont===files.length)
-												{
-														console.log("Todos los archivos fueron eliminados");
-														callback(true);
-												}
-										}
-								});
-							}
+								}
+						});
+					}
 				}
 				else {
 						callback(true);
