@@ -1,6 +1,6 @@
 /******************************************************************************
 . Centro de Ingeniería y Desarrollo Industrial
-. Nombre del módulo:    concatenar.js
+. Nombre del módulo:    concatFilesenar.js
 . Lenuaje:              Javascript
 . Propósito:    Este módulo contiene la lógica para volver a unir las partes
 .								enviadas desde la ambulancia y crear un archivo completo csv.
@@ -9,16 +9,16 @@
 . Desarrollado por:     Nataly Janeth Contreras Ramírez.
 ******************************************************************************/
 
-var concat=require('concat-files');
-var fs = require("fs");
+var concatFiles=require('concat-files');
+var fsConcatenar = require("fs");
 
 //var pathDestino='temp/';
 var archivoGenerado='import.csv'
 
 module.exports.Unir=function(pathDestino,callback){
 	/*
-				retorna en el callback el nombre del archivo final unido o si huvo falla
-				retorna un null.
+			retorna en el callback el nombre del archivo final unido o si huvo falla
+			retorna un null.
 	*/
 	console.log("LOGRO ENTRAR EN UNIR: "+pathDestino+archivoGenerado);
 	getFilesNames(pathDestino,function(files){
@@ -38,7 +38,7 @@ module.exports.Unir=function(pathDestino,callback){
 			}
 			// concatena todos los archivos en uno solo final. Si solo es un archivo no hace nada
 			if(files.length>1){
-				concat(files,pathDestino+archivoGenerado,function(){
+				concatFiles(files,pathDestino+archivoGenerado,function(){
 					callback(pathDestino+archivoGenerado);
 				});
 			}
@@ -57,7 +57,7 @@ module.exports.Unir=function(pathDestino,callback){
 }
 
 function getFilesNames(directorio,callback){
-	fs.readdir(directorio, function(err, files) {
+	fsConcatenar.readdir(directorio, function(err, files) {
 		if(err) callback([]);
 		callback(files);
 	});
@@ -67,7 +67,7 @@ module.exports.getFilesNames = getFilesNames;
 			Funcion para obtener el tamaño de un archivo que se le indique por el argumento.
 */
 module.exports.getFilesizeInBytes = function(filename){
-     var stats = fs.statSync(filename);
+     var stats = fsConcatenar.statSync(filename);
      var fileSizeInBytes = stats["size"];
      return fileSizeInBytes;
 }
@@ -83,7 +83,7 @@ module.exports.eliminarTemporales=function(pathDestino, callback){
 				if(files.length>0){
 					var cont=0;
 					for(i=0;i<files.length;i++){
-						fs.unlink(pathDestino+files[i], function(err){
+						fsConcatenar.unlink(pathDestino+files[i], function(err){
 								//comprobamos si ha ocurrido algun error
 								if(err){
 										console.error(err);
@@ -95,8 +95,8 @@ module.exports.eliminarTemporales=function(pathDestino, callback){
 										cont++;
 										if(cont===files.length)
 										{
-												console.log("Todos los archivos fueron eliminados");
-												callback(true);
+											console.log("Todos los archivos fueron eliminados");
+											callback(true);
 										}
 								}
 						});
@@ -113,16 +113,19 @@ module.exports.eliminarTemporales=function(pathDestino, callback){
 	});
 }
 
-module.exports.newFile= function(nombreFile, datos){
+module.exports.newFile= function(nombreFile, datos, callback){
 	// crea el archivo.
-	var writeStream = fs.createWriteStream(nombreFile);
-    fs.createWriteStream(nombreFile);
-	
-	// escribe en el archivo.
-	writeStream.write(datos);
-	writeStream.end();
+	var fs2 = require('fs');
+	fs2.writeFile(nombreFile, datos, function(err) {
+		if(err) {
+			return console.log(err);
+			callback(false);
+		}
+		callback(true);
+		console.log("The file was saved!");
+	});
 }
 module.exports.readFile = function(file){
-	var data = fs.readFileSync(file);
+	var data = fsConcatenar.readFileSync(file);
 	return data.toString();
 }

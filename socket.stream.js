@@ -205,8 +205,15 @@
 								console.log("emit de finalizacion enviado");
 								// crea un archivo ready.txt solo para indicarle a la tarea en brackground que el folder esta listo.
 								// para ser enviaod a la central.
-								concat.newFile(PathTemp+socket.parametros.ambulancia+"/"+"ready.txt", socket.parametros.TotalExportados.toString());
-
+								var pathReady= PathTemp+socket.parametros.ambulancia+"/"+"ready.txt";
+								//concat.newFile(pathReady, socket.parametros.TotalExportados.toString());
+								concat.newFile(pathReady, socket.parametros.TotalExportados.toString(), function(ok){
+									if(ok){
+										console.log("Si se pudo crear el READY.TXT")
+									}
+									else
+										console.log("No se creo el ready.txt");
+								});
 							}
 							else {
 								informaFalla(socket);

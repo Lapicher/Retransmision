@@ -1,8 +1,8 @@
-var fs = require('fs');
+var fsToCentral = require('fs');
 var socketServidor = require('socket.io-client');
-var ss = require('socket.io-stream');
+var ssToCentral = require('socket.io-stream');
 function newSocket(){
-	return socketServidor.connect('http://172.16.102.22:51000',{reconnect:false});
+	return socketServidor.connect('http://172.16.102.226:51000',{reconnect:false});
 }
 var socket  = newSocket();
 var dirTemp= './temp/';
@@ -21,6 +21,7 @@ var SizeTotal=0;
 var nfilesEnviados=0;
 var nombresArchivos=[];
 var ambulancia="";
+
 
 function reinicia(){
 	nfilesEnviados=0;
@@ -48,39 +49,38 @@ function startEnvio(){
 			ambulancia = arrAmbulancias.pop();
 			// se consultan los archivos de la ambulancia.
 			
-			setTimeout(function(){
-				manageFiles.getFilesNames(dirTemp+ambulancia, function(filesCreated){
-					console.log("Encontro archivos del folder "+filesCreated.length);
+			
+			manageFiles.getFilesNames(dirTemp+ambulancia, function(filesCreated){
+				console.log("Encontro archivos del folder "+filesCreated.length);
+				
+				if(filesCreated.length>2){
+					if(filesCreated.indexOf('ready.txt') > -1 && 
+					   filesCreated.indexOf('import.csv') > -1){
 					
-					if(filesCreated.length>0){
-						if(filesCreated.indexOf('ready.txt') > -1 && 
-						   filesCreated.indexOf('import.csv') > -1){
+						nombresArchivos=filesCreated;
+						// si se encuentra el archivo de ready, entonces se procedera a realizar en envio a la central.
+						// se envia el id de ambulancia para identificar de que ambulancia son los archivos.
+						socket.emit('ambulancia', ambulancia);
 						
-							nombresArchivos=filesCreated;
-							// si se encuentra el archivo de ready, entonces se procedera a realizar en envio a la central.
-							// se envia el id de ambulancia para identificar de que ambulancia son los archivos.
-							socket.emit('ambulancia', ambulancia);
-							
-							var fileReady= dirTemp+ambulancia+"/ready.txt";
-							TotalDocumentosExportados = parseInt(manageFiles.readFile(fileReady));
-							TotalDocumentosExportados = (TotalDocumentosExportados > 0)? TotalDocumentosExportados:0;
-							var fileImported = dirTemp+ambulancia+"/import.csv";
-							SizeTotal = manageFiles.getFilesizeInBytes(fileImported);
-							console.log("DOcst: "+TotalDocumentosExportados+ " Bytes: "+SizeTotal);
-							
-							iniciaDescarga(ambulancia);
-						}
-						else{
-							console.log("no encontro el archivo READY");
-							reinicia();
-						}
+						var fileReady= dirTemp+ambulancia+"/ready.txt";
+						TotalDocumentosExportados = parseInt(manageFiles.readFile(fileReady));
+						TotalDocumentosExportados = (TotalDocumentosExportados > 0)? TotalDocumentosExportados:0;
+						var fileImported = dirTemp+ambulancia+"/import.csv";
+						SizeTotal = manageFiles.getFilesizeInBytes(fileImported);
+						console.log("DOcst: "+TotalDocumentosExportados+ " Bytes: "+SizeTotal);
+						iniciaDescarga(ambulancia);
 					}
-					else
+					else{
+						console.log("no encontro el archivo READY");
 						reinicia();
-				});
-			}, 400);
+					}
+				}
+				else
+					reinicia();
+			});
 		}
-		
+		else
+			console.log("no cumple algo, "+procesando+" "+arrAmbulancias.length+" "+socket.connected);
 	},1000);
 }
 
@@ -91,9 +91,9 @@ function startEnvio(){
 	  Listener de conexion del socket.
 **********************************************************************************/
 socket.on('connect', function() {
-  fs.exists(dirTemp,function(si){
+  fsToCentral.exists(dirTemp,function(si){
 	  if(!si){
-		  fs.mkdir(dirTemp,function(err){
+		  fsToCentral.mkdir(dirTemp,function(err){
 			  if(err) throw err;
 			  continuaSincronizacion();
 		  });
@@ -102,6 +102,7 @@ socket.on('connect', function() {
 		  continuaSincronizacion();
 	  }
   });
+  
   function continuaSincronizacion(){
 	  if(!socket.connected){
 		  isConectedSinc=true;
@@ -117,6 +118,7 @@ socket.on('disconnect',function(){
 	console.log("Se desconecto el socket sincronizacion.......");
 	//global.socketInicio.emit('sincronizacion.falla');
 	socket = null;
+	reinicia();
 });
 
 /**********************************************************************************
@@ -139,13 +141,13 @@ function iniciaDescarga(Amb){
 		  if(socket.connected)
 			  socket.emit('docsTotales.data', TotalDocumentosExportados);
 		  else {
-			  global.socketInicio.emit('sincronizacion.desconectado');
+			  console.error("no esta conectado");
 			  socket.emit('descarga.fail');
-			  nfilesEnviados=0;
+			  reinicia();
 		  }        
     }
     else {
-        //console.log("No se encuentra conectado al servidor");
+        console.log("No se encuentra conectado al servidor");
         global.socketInicio.emit('sincronizacion.desconectado');
     }
 }
@@ -156,6 +158,7 @@ function iniciaDescarga(Amb){
 **********************************************************************************/
 //responde el servidor que recibio el total de docuemtnos exportados correctamente.
 socket.on('docsTotales.ok',function(data){
+	console.log("docsTotales recibidos, enviara Total de partes: "+TotalArchivosPartidos);
 	socket.emit('filesTotales.data',TotalArchivosPartidos);
 });
 /**********************************************************************************
@@ -164,12 +167,13 @@ socket.on('docsTotales.ok',function(data){
 socket.on('filesTotales.ok',function(data){
 
 	socket.emit('size.archivo', SizeTotal);
-	//console.log("envio tamaño total: "+SizeTotal);
+	console.log("envio tamaño total: "+SizeTotal);
 });
 socket.on('size.ok',function(){
 
 	// ya que recibio los parametros de inicio se puede iniciar con el envio de los archivos.
-	//console.log("archivos: "+nombresArchivos.length+ " Enviados: "+nfilesEnviados);
+	console.log("archivos: "+nombresArchivos.length+ " Enviados: "+nfilesEnviados);
+	console.log("Aqui enviara el primer archivo");
 
 	if (nfilesEnviados==0) {
 		enviaPiezaSiguiente();
@@ -186,11 +190,6 @@ socket.on('enviado.correcto',function(inf){
 	nfilesEnviados++;
 	//console.log('Archivo enviado Satisfactoriamente '+nfilesEnviados+ "porcentaje: "+porcentaje);
 
-	porcentaje=parseInt((nfilesEnviados*100)/TotalArchivosPartidos);
-	if(porcentaje==100)
-		porcentaje=98;
-	if(global.socketInicio)
-		global.socketInicio.emit('update.porcentaje', parseInt(porcentaje,10));
 	// vuelve a enviar los archivos restantes si no son el total.
 	if(nfilesEnviados<TotalArchivosPartidos)
 	{
@@ -207,6 +206,8 @@ socket.on('enviado.correcto',function(inf){
 socket.on('descarga.ok',function(){
 	//console.log("PROCESO TERMINADA");
 	// se prosigue a eliminar los datos de la colleccion sensores en mongo.
+	
+	
 	manageFiles.eliminarTemporales(dirTemp+ambulancia+"/" ,function(ok){
 		  if(ok){
 			  console.log("se eliminaron los archivos temporales");
@@ -215,11 +216,8 @@ socket.on('descarga.ok',function(){
 			  console.log("No se eliminaron los temporales");
 		  }
 		  socket.disconnect();
-		  console.log("TERMINO DE SINCRONIZAR "+ambulancia);
-		  reinicia();
-		  
+		  console.log("TERMINO DE SINCRONIZAR LA AMBULANCIA: "+ambulancia);
 	});
-
 });
 /**********************************************************************************
 	  responde que los archivos recibidos en la central estan completos. FAIL.
@@ -248,9 +246,9 @@ function send(nombreArchivo,archivo){
   //console.log("METODO ENVIAR");
   if(socket.connected){
       enviandoArchivo=true;
-      stream = ss.createStream();
-      ss(socket).emit('archivo.enviado', stream, {name: nombreArchivo});
-      fs.createReadStream(archivo).pipe(stream);
+      stream = ssToCentral.createStream();
+      ssToCentral(socket).emit('archivo.enviado', stream, {name: nombreArchivo});
+      fsToCentral.createReadStream(archivo).pipe(stream);
   }
   else {
       console.log("No se encuentra conectado el modulo de sincronizacion");
