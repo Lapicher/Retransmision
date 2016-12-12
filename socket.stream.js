@@ -35,6 +35,7 @@
   Parametros.prototype.nRecibidos=0;
   Parametros.prototype.SizeTotal=0;
   Parametros.prototype.ambulancia="";
+  Parametros.prototype.subfolder="";
 
 
   /********************************************************************************************************
@@ -43,7 +44,7 @@
    io.sockets.on('connection', function(socket){
 
 	 socket.isConected=true;
-	 console.log("SINCRONIZACION de Signos Vitales - Ambulancia conectada para sincronizar");
+	 console.log("SINCRONIZACION RECEPTOR de Signos Vitales -");
 
 	 socket.on('ambulancia',function(serie){
 
@@ -79,14 +80,40 @@
 			});
 
 			function creaFolderAmb(){
-			  fs.exists(PathTemp+serie,function(si){
+			  var folderAmb = PathTemp+serie;
+			  fs.exists(folderAmb,function(si){
 				  if(!si){
-					fs.mkdir(PathTemp+serie,function(err){
+					fs.mkdir(folderAmb,function(err){
 						if(err) console.error("NO SE PUDO CREAR LA CARPETA TEMPORAL DE LOS ARCHIVOS DEL FRAP PARA SINCRONIZAR, "+err);
-						console.log("se creo el directorio");
+						else{
+							console.log("se creo el directorio");
+							creaSubFolderTime(folderAmb);
+						}
+						
 					});
 				  }
+				  else{
+					  creaSubFolderTime(folderAmb);
+				  }
 			  });
+			}
+			function creaSubFolderTime(dir){
+				var tiempo = new Date();
+				var subfolderTime = "" + tiempo.getFullYear()+tiempo.getMonth()+tiempo.getDay()+tiempo.getHours()+tiempo.getMinutes();
+				subfolderTime = dir+"/" + subfolderTime;
+				fs.exists(subfolderTime, function(si){
+					if(!si){
+						fs.mkdir(subfolderTime, function(err){
+							if(err) console.error("NO SE PUDO CREAR EL SUBFOLDER");
+							else{
+								console.log("Creara archivo de conectado: "+subfolderTime);
+								fs.writeFileSync(subfolderTime+"/z.txt","");
+								socket.parametros.subfolder = subfolderTime;
+							}
+								
+						});
+					}
+				});
 			}
 		}
 		else {
@@ -143,15 +170,15 @@
 	   ********************************************************************************************************/
 	  ss(socket).on('archivo.enviado', function(stream, data) {
 
-		  var path=PathTemp+socket.parametros.ambulancia+"/"+data.name;
-		  canWrite(PathTemp+socket.parametros.ambulancia,function(err,isWriteable){
-			  if(isWriteable && !err){
+		  var path=socket.parametros.subfolder+"/"+data.name;
+		  canWrite(socket.parametros.subfolder,function(err,isWriteable){
+			  if(isWriteable && !err && socket.connected){
 				  stream.pipe(fs.createWriteStream(path).on('close',function(err){
 					if(err){
 						console.log('File could not be saved.');
 						socket.emit('descarga.fail');
 						socket.parametros.nRecibidos=0;
-						eliminaTemporales(socket.parametros.ambulancia);
+						eliminaTemporales(socket.parametros.subfolder);
 					}else{
 						//console.log("id: "+socket.id);
 						console.log('File saved.');
@@ -166,8 +193,6 @@
 				  socket.parametros.nRecibidos=0;
 			  }
 		  });
-
-
 	  });
 
 	  /********************************************************************************************************
@@ -187,7 +212,7 @@
 					//console.log("Se recibieron todas las partes correctamente, ahora vamos a unir");
 					
 					
-					concat.Unir(PathTemp+socket.parametros.ambulancia+"/",function(archivo){
+					concat.Unir(socket.parametros.subfolder+"/",function(archivo){
 						if(archivo!==null){
 							//console.log("Archivo final para importar: "+archivo);
 
@@ -205,7 +230,7 @@
 								console.log("emit de finalizacion enviado");
 								// crea un archivo ready.txt solo para indicarle a la tarea en brackground que el folder esta listo.
 								// para ser enviaod a la central.
-								var pathReady= PathTemp+socket.parametros.ambulancia+"/"+"ready.txt";
+								var pathReady = socket.parametros.subfolder+"/"+"ready.txt";
 								//concat.newFile(pathReady, socket.parametros.TotalExportados.toString());
 								concat.newFile(pathReady, socket.parametros.TotalExportados.toString(), function(ok){
 									if(ok){
@@ -229,8 +254,6 @@
 				else {
 					informaFalla(socket);
 				}
-				socket.parametros.nRecibidos=0;
-
 	  });
 
 	  /********************************************************************************************************
@@ -244,25 +267,21 @@
 			  LISTENER PARA DESCONECTAR
 	   ********************************************************************************************************/
 	  socket.on('disconnect',function(){
+		  
+		  if(socket.parametros.nRecibidos < socket.parametros.TotalPartes){
+				
+			  // elimina los archivos en caso de que haya habido una desconexion sin terminar de sincronizar.
+			  concat.eliminarTemporales(socket.parametros.subfolder+"/",function(del){
+				  //console.log("Eliminacion de los temporarles: "+del);
+				  if(!del) console.error("No elimino archivos");
+			  });
+				
+		  }
 		  socket.parametros.nRecibidos=0;
 		  console.log("Ambulancia sincronizacion DESCONECTADA");
 		  socket.isConected=false;
 		  socket.leave(socket.room);
-
-		  concat.eliminarTemporales(PathTemp+socket.parametros.ambulancia+"/",function(del){
-			  //console.log("Eliminacion de los temporarles: "+del);
-			  if(del){
-				fs.exists(PathTemp+socket.parametros.ambulancia,function(si){
-					if(!si){
-					  fs.rmdir(PathTemp+"/"+socket.parametros.ambulancia, function(err){
-						  if(err)
-							  console.log("ocurrio un error: "+err);
-					  });
-					}
-				  });
-			  }
-		  });
-
+		  
 		  var posSoc=arrSockets.indexOf(socket);
 		  if(posSoc!=-1)
 			  arrSockets.splice(posSoc,1);
@@ -275,7 +294,7 @@
 			DE LA AMBULANCIA Y EL NOMBRE SERA EL MISMO DE LA AMBULANCIA.
 	 ********************************************************************************************************/
 	function eliminaTemporales(carpeta){
-		concat.eliminarTemporales(PathTemp+carpeta+"/",function(del){
+		concat.eliminarTemporales(carpeta+"/",function(del){
 			//console.log("Eliminacion de los temporarles: "+del);
 		});
 	}
@@ -287,7 +306,7 @@
 		soc.emit('descarga.fail');
 		console.log("Falla");
 		soc.parametros.nRecibidos=0;
-		eliminaTemporales(soc.parametros.ambulancia);
+		eliminaTemporales(soc.parametros.subfolder);
 		//clearInterval(this.timer);
 	}
 	/********************************************************************************************************

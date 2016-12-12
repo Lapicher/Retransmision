@@ -96,6 +96,7 @@ module.exports.eliminarTemporales=function(pathDestino, callback){
 										if(cont===files.length)
 										{
 											console.log("Todos los archivos fueron eliminados");
+											//fsConcatenar.rmdirSync(pathDestino);
 											callback(true);
 										}
 								}
@@ -109,7 +110,6 @@ module.exports.eliminarTemporales=function(pathDestino, callback){
 		else {
 			callback(false);
 		}
-
 	});
 }
 

@@ -1,16 +1,20 @@
-var fsToCentral = require('fs');
+var fsToCentral = require('fs'),
+	path = require('path');
 var socketServidor = require('socket.io-client');
 var ssToCentral = require('socket.io-stream');
-
 var dirTemp= './temp/';
 var manageFiles = require('./concatenar');
 
 var procesando = false;
 var documentosExportados=0;
 var timer = null;
+timerSubfolders= null;
+var compuEsclava = 1;
+var archivosExcluidosSincronizacion = 3;
 
 // variable que contiene los folders o ambulancias para enviar sus archivos a la central.
 var arrDirSincro = [];
+var posicionArrDirSincro=0;
 
 var TotalDocumentosExportados=0;
 var TotalArchivosPartidos=0;
@@ -19,8 +23,32 @@ var nfilesEnviados=0;
 var nombresArchivos=[];
 var ambulancia="";
 
+// Funcion para leer todos los directorios de datos sincronizados desde los maletines.
+function getDirectories(srcpath) {
+  var arrRetornar = [];
+  var foldersAmbulancias = fsToCentral.readdirSync(srcpath);
+  for(amb in foldersAmbulancias){
+	  var subfolders = fsToCentral.readdirSync(srcpath+"/"+foldersAmbulancias[amb]);
+	  for(subfolder in subfolders){
+		  arrRetornar.push(foldersAmbulancias[amb]+"/"+subfolders[subfolder]);
+	  } 
+  }
+  return arrRetornar;
+}
+function getFiles(srcpath) {
+  return fsToCentral.readdirSync(srcpath).filter(function(file) {
+	  
+    return fsToCentral.statSync(path.join(srcpath, file));
+  });
+}
+
+function eliminaCarpeta(pathfolder){
+	fsToCentral.rmdirSync(pathfolder);
+}
+
+
 function newSocket(){
-	var socketInterno = socketServidor.connect('http://172.16.100.97:51000',{reconnect:false});
+	var socketInterno = socketServidor.connect('http://172.16.102.212:51000',{reconnect:false});
 	socketInterno.eliminado=false;
 	/**********************************************************************************
 		  Listener de conexion del socket.
@@ -28,21 +56,23 @@ function newSocket(){
 	function continuaSincronizacion(){
 		if(!socketInterno.connected){
 			isConectedSinc=true;
-			console.log( "SINCRONIZACION LISTO - conectado para sincronizar datos");
+			console.log( "SINCRONIZACION SERVIDOR -");
 		}
 	}
 	socketInterno.on('connect', function() {
-	  fsToCentral.exists(dirTemp,function(si){
-		  if(!si){
-			  fsToCentral.mkdir(dirTemp,function(err){
-				  if(err) throw err;
-				  continuaSincronizacion();
-			  });
-		  }
-		  else {
-			  continuaSincronizacion();
-		  }
+		fsToCentral.exists(dirTemp,function(si){
+			if(!si){
+				fsToCentral.mkdir(dirTemp,function(err){
+					if(err) throw err;
+					continuaSincronizacion();
+				});
+			}
+			else {
+				continuaSincronizacion();
+			}
 	});
+	
+	// EVENTOS DEL SOCKET CON LA COMUNICACION A LA CENTRAL.
 	  
 	/**********************************************************************************
 		eventos socket de secuencia del envio de archivos.
@@ -100,7 +130,6 @@ function newSocket(){
 		//console.log("PROCESO TERMINADA");
 		// se prosigue a eliminar los datos de la colleccion sensores en mongo.
 		
-		
 		manageFiles.eliminarTemporales(dirTemp+ambulancia+"/" ,function(ok){
 			  if(ok){
 				  console.log("se eliminaron los archivos temporales");
@@ -138,7 +167,6 @@ function newSocket(){
 }
 var socket  = newSocket();
 
-
 function reinicia(){
 	nfilesEnviados=0;
 	procesando=false;
@@ -147,7 +175,7 @@ function reinicia(){
 
 module.exports.start = startEnvio;
 function startEnvio(){
-	
+		
 	timer = setInterval(function(){
 		
 		if(socket.eliminado){
@@ -155,21 +183,33 @@ function startEnvio(){
 			socket = newSocket();
 		}
 		
-		manageFiles.getFilesNames(dirTemp, function(directorios){
-			// me retorna las subcarpetas de temp. Osea las ambulancias: Amb01, Amb02...
-			arrDirSincro = directorios;
-		});
+		arrDirSincro = getDirectories(dirTemp);
+		
+		//console.log(getFiles(dirTemp+"/"+arrDirSincro[0]+"/"));
 	
 		if(!procesando && arrDirSincro.length>0 && socket.connected){
 			procesando=true;
 			clearInterval(timer);
 			console.log("se detiene timer mientras trabaja el envio de los archivos....");
+			
+			var filesCreated=[];
+			
 			// se obtiene la ambulancia para iniciar el envio de los archivos.
-			ambulancia = arrDirSincro.pop();
-			// se consultan los archivos de la ambulancia.
-		
-		
-			manageFiles.getFilesNames(dirTemp+ambulancia, function(filesCreated){
+			for(pos in arrDirSincro){
+				ambulancia = arrDirSincro[pos];
+				// se consultan los archivos de la ambulancia.
+				filesCreated = getFiles(dirTemp+arrDirSincro[pos]);
+				// en caso de que el subfolder no tenga archivos, se continua con otra carpeta.
+				// si si existen archivos para sincronizar, se detiene el for.
+				if(filesCreated.length>2)
+					break;
+				else if(filesCreated.length==0){
+					// si es un folder vacio se elimina.
+					eliminaCarpeta(dirTemp+ambulancia);
+				}
+			}
+			
+			//manageFiles.getFilesNames(dirTemp+ambulancia, function(filesCreated){
 				console.log("Encontro archivos del folder "+filesCreated.length);
 				
 				if(filesCreated.length>2){
@@ -179,7 +219,7 @@ function startEnvio(){
 						nombresArchivos=filesCreated;
 						// si se encuentra el archivo de ready, entonces se procedera a realizar en envio a la central.
 						// se envia el id de ambulancia para identificar de que ambulancia son los archivos.
-						socket.emit('ambulancia', ambulancia);
+						socket.emit('ambulancia', compuEsclava);
 						
 						var fileReady= dirTemp+ambulancia+"/ready.txt";
 						TotalDocumentosExportados = parseInt(manageFiles.readFile(fileReady));
@@ -194,18 +234,16 @@ function startEnvio(){
 						reinicia();
 					}
 				}
-				else
+				else{
+					// quiere decir que tiene algun archivo ahi.
 					reinicia();
-			});
+				}
+			//});
 		}
 		else
 			console.log("no cumple algo, "+procesando+" "+arrDirSincro.length+" "+socket.connected);
 	},1000);
 }
-
-
-// EVENTOS DEL SOCKET CON LA COMUNICACION A LA CENTRAL.
-
 
 
 
@@ -220,7 +258,7 @@ function iniciaDescarga(Amb){
 	nfilesEnviados=0;
     if(socket.connected){
         
-		  TotalArchivosPartidos = nombresArchivos.length-2; // menos uno que es el archivo exportado principal.
+		  TotalArchivosPartidos = nombresArchivos.length-archivosExcluidosSincronizacion; // menos uno que es el archivo exportado principal.
 		  console.log("se partieron correctamente los archivos: "+TotalArchivosPartidos);
 		  /**********************************************************************************
 				logica para enviar a la central.
@@ -258,6 +296,7 @@ function send(nombreArchivo,archivo){
   else {
       console.log("No se encuentra conectado el modulo de sincronizacion");
       //global.socketInicio.emit('sincronizacion.falla');
+	  reinicia();
   }
 }
 
