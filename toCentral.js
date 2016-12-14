@@ -1,3 +1,4 @@
+var config = require('./config.json');
 var fsToCentral = require('fs'),
 	path = require('path');
 var socketServidor = require('socket.io-client');
@@ -48,7 +49,7 @@ function eliminaCarpeta(pathfolder){
 
 
 function newSocket(){
-	var socketInterno = socketServidor.connect('http://172.16.102.212:51000',{reconnect:false});
+	var socketInterno = socketServidor.connect('http://'+config.ipServidor+':'+config.puertoServidor,{reconnect:false});
 	socketInterno.eliminado=false;
 	/**********************************************************************************
 		  Listener de conexion del socket.
@@ -59,17 +60,9 @@ function newSocket(){
 			console.log( "SINCRONIZACION SERVIDOR -");
 		}
 	}
+	
 	socketInterno.on('connect', function() {
-		fsToCentral.exists(dirTemp,function(si){
-			if(!si){
-				fsToCentral.mkdir(dirTemp,function(err){
-					if(err) throw err;
-					continuaSincronizacion();
-				});
-			}
-			else {
-				continuaSincronizacion();
-			}
+		console.log("SINCRONIZACION CONECTADA A SERVIDOR");
 	});
 	
 	// EVENTOS DEL SOCKET CON LA COMUNICACION A LA CENTRAL.
@@ -161,8 +154,7 @@ function newSocket(){
 		socketInterno.eliminado=true;
 		reinicia();
 	});
-	
-	});
+
 	return socketInterno;
 }
 var socket  = newSocket();
