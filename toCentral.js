@@ -1,3 +1,18 @@
+/******************************************************************************
+. Centro de Ingeniería y Desarrollo Industrial
+. Nombre del módulo:    sinc.js
+. Lenuaje:              Javascript
+. Propósito:    Este modulo se encarga de revisar cada segundo el directorio 
+.				donde se estan guardando los archivos sincronizados desde los
+.				maletines, al encontrar archivos en uno de los subfolders, inicia
+.				el proceso de sincronizarlos ahora con el servidor central.
+.				Al no existir conexion con la central, se siguen guardando los
+.				archivos de los maletines y en cuanto exista conexion, se inicia
+.				la sincronizacion a la central.
+.
+.
+. Desarrollado por:     Nataly Janeth Contreras Ramírez.
+******************************************************************************/
 var config = require('./config.json');
 var fsToCentral = require('fs'),
 	path = require('path');
@@ -38,8 +53,7 @@ function getDirectories(srcpath) {
 }
 function getFiles(srcpath) {
   return fsToCentral.readdirSync(srcpath).filter(function(file) {
-	  
-    return fsToCentral.statSync(path.join(srcpath, file));
+		return fsToCentral.statSync(path.join(srcpath, file));
   });
 }
 
@@ -152,7 +166,9 @@ function newSocket(){
 		console.log("Se desconecto el socket sincronizacion.......");
 		//global.socketInicio.emit('sincronizacion.falla');
 		socketInterno.eliminado=true;
-		reinicia();
+
+		if(procesando)
+			reinicia();
 	});
 
 	return socketInterno;
@@ -166,12 +182,15 @@ function reinicia(){
 }
 
 module.exports.start = startEnvio;
+var filesBasura=0;
+var contveces=0;
 function startEnvio(){
 		
 	timer = setInterval(function(){
 		
+		
 		if(socket.eliminado){
-			console.log(" ######### CREO NUEVO SOCKET ");
+			console.log(" ######### CREO NUEVO SOCKET #############################");
 			socket = newSocket();
 		}
 		
@@ -182,7 +201,7 @@ function startEnvio(){
 		if(!procesando && arrDirSincro.length>0 && socket.connected){
 			procesando=true;
 			clearInterval(timer);
-			console.log("se detiene timer mientras trabaja el envio de los archivos....");
+			//console.log("se detiene timer mientras trabaja el envio de los archivos....");
 			
 			var filesCreated=[];
 			
@@ -201,39 +220,60 @@ function startEnvio(){
 				}
 			}
 			
-			//manageFiles.getFilesNames(dirTemp+ambulancia, function(filesCreated){
-				console.log("Encontro archivos del folder "+filesCreated.length);
+			
+			if(filesCreated.length>2){
+				if(filesCreated.indexOf('ready.txt') > -1 && 
+				   filesCreated.indexOf('import.csv') > -1){
 				
-				if(filesCreated.length>2){
-					if(filesCreated.indexOf('ready.txt') > -1 && 
-					   filesCreated.indexOf('import.csv') > -1){
+					nombresArchivos=filesCreated;
+					// si se encuentra el archivo de ready, entonces se procedera a realizar en envio a la central.
+					// se envia el id de ambulancia para identificar de que ambulancia son los archivos.
+					socket.emit('ambulancia', compuEsclava);
 					
-						nombresArchivos=filesCreated;
-						// si se encuentra el archivo de ready, entonces se procedera a realizar en envio a la central.
-						// se envia el id de ambulancia para identificar de que ambulancia son los archivos.
-						socket.emit('ambulancia', compuEsclava);
-						
-						var fileReady= dirTemp+ambulancia+"/ready.txt";
-						TotalDocumentosExportados = parseInt(manageFiles.readFile(fileReady));
-						TotalDocumentosExportados = (TotalDocumentosExportados > 0)? TotalDocumentosExportados:0;
-						var fileImported = dirTemp+ambulancia+"/import.csv";
-						SizeTotal = manageFiles.getFilesizeInBytes(fileImported);
-						console.log("DOcst: "+TotalDocumentosExportados+ " Bytes: "+SizeTotal);
-						iniciaDescarga(ambulancia);
-					}
-					else{
-						console.log("no encontro el archivo READY");
-						reinicia();
-					}
+					var fileReady= dirTemp+ambulancia+"/ready.txt";
+					TotalDocumentosExportados = parseInt(manageFiles.readFile(fileReady));
+					TotalDocumentosExportados = (TotalDocumentosExportados > 0)? TotalDocumentosExportados:0;
+					var fileImported = dirTemp+ambulancia+"/import.csv";
+					SizeTotal = manageFiles.getFilesizeInBytes(fileImported);
+					console.log("DOcst: "+TotalDocumentosExportados+ " Bytes: "+SizeTotal);
+					iniciaDescarga(ambulancia);
 				}
 				else{
-					// quiere decir que tiene algun archivo ahi.
+					console.log("no encontro el archivo READY");
+					
+					// colocar aqui, que si a la 5 vez no hay ready quiere decir que hasta ahi se quedo,
+					// y eliminar esos datos basura.
+					// o no a la 15 ves sino tambien contar los archivos, si va cambiando seguir esperando.
+					// ya cuando no cambie que elimine esos archivos basura.
+					// todo esto antes de reiniciar().
+					contveces++;
+					
+					if(contveces==30 && filesBasura == filesCreated.length ){
+						contveces=0;
+						manageFiles.eliminarTemporales(dirTemp+ambulancia+"/" ,function(ok){
+							  if(ok){
+								  console.log("se eliminaron los archivos basura: "+ambulancia);
+							  }
+							  else {
+								  console.log("No se eliminaron los archivos basura");
+							  }
+						});
+					}
+					else
+						console.log("encontro elementos basura: "+contveces);
+						
+					filesBasura = filesCreated.length;
 					reinicia();
 				}
-			//});
+			}
+			else{
+				reinicia();
+			}
 		}
-		else
-			console.log("no cumple algo, "+procesando+" "+arrDirSincro.length+" "+socket.connected);
+		else{
+			//console.log("no cumple algo, "+procesando+" "+arrDirSincro.length+" "+socket.connected);
+		}
+			
 	},1000);
 }
 

@@ -3,7 +3,7 @@
 . Nombre del módulo:    concatFilesenar.js
 . Lenuaje:              Javascript
 . Propósito:    Este módulo contiene la lógica para volver a unir las partes
-.								enviadas desde la ambulancia y crear un archivo completo csv.
+.				enviadas desde la ambulancia y crear un archivo completo csv.
 .
 .
 . Desarrollado por:     Nataly Janeth Contreras Ramírez.

@@ -1,15 +1,18 @@
 /******************************************************************************
 . Centro de Ingeniería y Desarrollo Industrial
-. Nombre del módulo:    sinc.js
+. Nombre del módulo:    socket.stream.js
 . Lenuaje:              Javascript
 . Propósito:    Este módulo contiene la lógica para la sincronizacion con cada
-.               nitrogen de las ambulancias, es el encargado de guardar los datos
-.               en la central y unir las partes recibidas por cada ambulancia.
+.               nitrogen de las ambulancias, es el encargado de guardar los 
+.				archivos partidos por la nitrogen. En este archivo se manda aLinkcolor
+.				correr el proceso en background que se encarga de revisar cada cierto 
+.				tiempo si hay archivos que sincronizar.
 .
 .
 . Desarrollado por:     Nataly Janeth Contreras Ramírez.
 ******************************************************************************/
-  var io = require('socket.io').listen(2016);
+  var configClient = require('./config.json');
+  var io = require('socket.io').listen(configClient.puertoCliente);
   var ss = require('socket.io-stream');
   var path = require('path');
 
@@ -275,8 +278,16 @@
 				  //console.log("Eliminacion de los temporarles: "+del);
 				  if(!del) console.error("No elimino archivos");
 			  });
-				
 		  }
+		  var numeroArchivosSincronizados = getFiles(socket.parametros.subfolder+"/").length;
+		  // pregunta si al desconecatar solo esta el archivo z.txt quiere decir que no sincronizo, por tanto
+		  // eliminamos ese archivo.
+		  if(numeroArchivosSincronizados<2){
+			  concat.eliminarTemporales(socket.parametros.subfolder+"/",function(del){
+				  if(!del) console.error("No elimino archivos");
+			  });
+		  }
+		  
 		  socket.parametros.nRecibidos=0;
 		  console.log("Ambulancia sincronizacion DESCONECTADA");
 		  socket.isConected=false;
@@ -316,4 +327,12 @@
 		fs.access(path, fs.W_OK, function(err) {
 		  callback(null, !err);
 		});
+	}
+	/********************************************************************************************************
+			  METODO PARA OBTENER UN ARREGLO DE ARCHIVOS CONTENIDO EN EL PATH DEL ARGUMENTO.
+	 ********************************************************************************************************/
+	function getFiles(srcpath) {
+	  return fs.readdirSync(srcpath).filter(function(file) {
+			return fs.statSync(path.join(srcpath, file));
+	  });
 	}
