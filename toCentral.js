@@ -25,7 +25,7 @@ var procesando = false;
 var documentosExportados=0;
 var timer = null;
 timerSubfolders= null;
-var compuEsclava = 1;
+var compuEsclava = config.nombreEquipoSinc;
 var archivosExcluidosSincronizacion = 3;
 
 // variable que contiene los folders o ambulancias para enviar sus archivos a la central.
