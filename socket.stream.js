@@ -13,6 +13,7 @@
 ******************************************************************************/
   var configClient = require('./config.json');
   var io = require('socket.io').listen(configClient.puertoCliente);
+	
   var ss = require('socket.io-stream');
   var path = require('path');
 
@@ -23,6 +24,11 @@
   var PathTemp='./temp/';
   var arrSockets=[];
 
+  
+  // configuracion para el servidor socket para revisar que en un segundo desconecte el socket
+  // sino muestra señal de conectado.
+  io.set('heartbeat timeout', 1000); 
+  io.set('heartbeat interval', 100);
   
   // inicia el proceso en segundo plano con timer para conectarse a la central y
   // enviarle los archivos uno a uno a la central de cada maletin almacenado en esta
@@ -51,6 +57,11 @@
 
 	 socket.on('ambulancia',function(serie){
 
+		socket.parametros=new Parametros();
+		socket.parametros.ambulancia=serie;
+		socket.parametros.nRecibidos=0;
+			
+		
 		console.log("Recibi los parametros del numero de Serie de la Ambulancia: "+serie);
 		var yaExiste=0;
 		arrSockets.forEach(function(soc){
@@ -63,9 +74,7 @@
 				AUTOMATICAMENTE, SINO SE AGREGA AL ARREGLO LOCAL DE SOCKETS O AMBULANCIAS CONECTADAS.
 		 ********************************************************************************************************/
 		if(!yaExiste){
-			socket.parametros=new Parametros();
-			socket.parametros.ambulancia=serie;
-			socket.parametros.nRecibidos=0;
+			
 			arrSockets.push(socket);
 
 			//console.log("total de sockets conectados: "+arrSockets.length);
@@ -271,24 +280,35 @@
 	   ********************************************************************************************************/
 	  socket.on('disconnect',function(){
 		  
-		  if(socket.parametros.nRecibidos < socket.parametros.TotalPartes){
+		  if(socket.parametros.nRecibidos!='undefined'){
+			  if(socket.parametros.nRecibidos < socket.parametros.TotalPartes){
 				
-			  // elimina los archivos en caso de que haya habido una desconexion sin terminar de sincronizar.
-			  concat.eliminarTemporales(socket.parametros.subfolder+"/",function(del){
-				  //console.log("Eliminacion de los temporarles: "+del);
-				  if(!del) console.error("No elimino archivos");
-			  });
+				  // elimina los archivos en caso de que haya habido una desconexion sin terminar de sincronizar.
+				  concat.eliminarTemporales(socket.parametros.subfolder+"/",function(del){
+					  //console.log("Eliminacion de los temporarles: "+del);
+					  if(!del) console.error("No elimino archivos");
+				  });
+			  }
+			  if(fs.existsSync(socket.parametros.subfolder+"/")){
+				  var numeroArchivosSincronizados = getFiles(socket.parametros.subfolder+"/").length;
+				  // pregunta si al desconecatar solo esta el archivo z.txt quiere decir que no sincronizo, por tanto
+				  // eliminamos ese archivo.
+				  if(numeroArchivosSincronizados<2){
+					  concat.eliminarTemporales(socket.parametros.subfolder+"/",function(del){
+						  if(!del) console.error("No elimino archivos");
+						  else
+							  fs.rmdirSync(socket.parametros.subfolder+"/");
+					  });
+				  }
+			  }
+			  socket.parametros.nRecibidos=0;
 		  }
-		  var numeroArchivosSincronizados = getFiles(socket.parametros.subfolder+"/").length;
-		  // pregunta si al desconecatar solo esta el archivo z.txt quiere decir que no sincronizo, por tanto
-		  // eliminamos ese archivo.
-		  if(numeroArchivosSincronizados<2){
-			  concat.eliminarTemporales(socket.parametros.subfolder+"/",function(del){
-				  if(!del) console.error("No elimino archivos");
-			  });
-		  }
+		  else
+			  console.log("es undefinido nRecibidos, pero se controlo");
 		  
-		  socket.parametros.nRecibidos=0;
+		  
+		  //if(socket.parametros!='undefined')
+				
 		  console.log("Ambulancia sincronizacion DESCONECTADA");
 		  socket.isConected=false;
 		  socket.leave(socket.room);
@@ -307,6 +327,7 @@
 	function eliminaTemporales(carpeta){
 		concat.eliminarTemporales(carpeta+"/",function(del){
 			//console.log("Eliminacion de los temporarles: "+del);
+			if(del) fs.rmdirSync(carpeta);
 		});
 	}
 	/********************************************************************************************************
@@ -316,7 +337,8 @@
 	function informaFalla(soc){
 		soc.emit('descarga.fail');
 		console.log("Falla");
-		soc.parametros.nRecibidos=0;
+		if(soc.parametros!=undefined)
+			soc.parametros.nRecibidos=0;
 		eliminaTemporales(soc.parametros.subfolder);
 		//clearInterval(this.timer);
 	}
